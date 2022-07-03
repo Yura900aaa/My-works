@@ -1,0 +1,439 @@
+OPERNIS1: Forecasting
+========================================================
+author: Eliseev A. Valiulin Y. Smirnov Y. Magomedova A.
+date: 
+autosize: true
+
+Basic information
+========================================================
+
+
+
+- The data contain information on the volume of wholesale turnover in Moscow among all its companies for the period of 2010-2019, the data are presented monthly in billion rubles in absolute values.
+
+- Wholesale turnover - revenue from the sale of goods purchased earlier on a party for the purpose of resale to legal entities and individual entrepreneurs for professional use (processing or further sale).
+
+
+
+Wholesale turnover 2010-2019 (billion rubles)
+========================================================
+
+
+```{r include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(forecast)
+library(sophisthse)
+```
+
+
+```{r,  echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse) # ggplot2 и трансформация данных
+library(readxl) # Загрузка экселей
+library(forecast) # анализ временных рядов и прогнозирование
+library(lubridate) # операции с датами
+library(stringr)  # Работа с текстовыми строками
+library(fpp2)
+```
+
+```{r,  echo = FALSE}
+library(readxl)
+mm <- read_excel("C:/Users/Юра/Desktop/lastnis/Detalizatsia_2.xlsx", 
+    skip = 13)
+View(mm)
+```
+
+```{r include=FALSE}
+names(mm) <- c('allorg', 'bigorg', 'month', 'year')
+head(mm)
+```
+
+```{r,  include=FALSE}
+mm1 <- 
+  mm %>%
+  mutate(date = ymd(paste(year, month, 1))) 
+
+```
+
+
+```{r,  include=FALSE}
+summary(mm)
+```
+
+```{r, echo = FALSE}
+
+mm1 %>%
+  ggplot(aes(date, allorg)) +
+  geom_line() +
+  labs( title = 'Wholesale turnover 2010-2019 (billion rubles)', x = 'time', y  ='turnover'
+)
+ 
+```
+
+```{r include=FALSE}
+mm1_first <- 
+  mm1 %>%
+  summarize(year = year(first(date)),
+            month = month(first(date)))
+mm1_first
+```
+
+```{r include=FALSE}
+mm1_ts <- 
+  ts(data = mm1$allorg, 
+            start = c(mm1_first$year, mm1_first$month), 
+            frequency = 12)
+mm1_ts %>% tail(n = 21) %>% round()
+```
+
+```{r include=FALSE}
+autoplot(mm1_ts)  +
+  geom_line(color = 'lightSkyblue')
+```
+
+
+Time series
+================================================
+
+```{r echo = FALSE}
+mm1_d <- mm1_ts %>% 
+  decompose(type = 'multiplicative')
+autoplot(mm1_d)
+```
+
+
+
+
+```{r include=FALSE}
+# Сезонные индексы
+mm1_d %>% seasonal() %>% head(12) %>% round(1)
+# Тренд-циклическая компонента
+mm1_d %>% trendcycle() %>% head(12) %>% round(1)
+# Остаток
+mm1_d %>% remainder() %>% head(12) %>% round(1)
+```
+
+
+
+```{r include=FALSE}
+autoplot(mm1_ts, series = 'Оригинал') +
+  autolayer(trendcycle(mm1_d), series = 'Тренд')  +
+  scale_color_manual(values = c('lightskyblue', 'red')) +
+  scale_x_continuous(minor_breaks = start(mm1_ts):end(mm1_ts))+
+  labs(y = 'turnover')
+```
+
+
+
+```{r include=FALSE}
+autoplot(seasonal(mm1_d)) +
+  labs(y = NULL, x = NULL,
+       title = 'Сезонные коэффициенты') +
+  scale_x_continuous(minor_breaks = start(mm1_ts):end(mm1_ts))
+```
+
+
+
+```{r include=FALSE}
+autoplot(mm1_ts, series = 'Оригинал') +
+  autolayer(trendcycle(mm1_d) * seasonal(mm1_d),
+            series = 'Модель') + 
+  scale_colour_manual(values = c('dodgerblue', 'red'))
+  
+```
+
+```{r include=FALSE}
+autoplot(remainder(mm1_d)) +
+  labs(y = NULL, x = NULL,
+       title = 'Нерегулярный компонент ряда') +
+  scale_x_continuous(minor_breaks = start(mm1_ts):end(mm1_ts))
+```
+
+
+
+```{r include=FALSE}
+mm1_adj <- seasadj(mm1_d)
+autoplot(mm1_ts, series = 'Оригинал') +
+  autolayer(trendcycle(mm1_d), series = 'Тренд') +
+  autolayer(mm1_adj, series = 'СС ряд') + 
+  scale_colour_manual(values = c('lightskyblue', 'brown', 'red')) +
+  
+  scale_x_continuous(minor_breaks = start(mm1_ts):end(mm1_ts))
+```
+
+
+```{r include=FALSE}
+library(readxl)
+data <- read_excel("C:/Users/Юра/Desktop/lastnis/data2.xls", 
+    skip = 2)
+View(data)
+```
+
+```{r include=FALSE}
+names(data) <- c('year', 'month', 'qw', 'qw1', 'qw2', 'qw3', 'inftot')
+head(data)
+```
+
+
+```{r include=FALSE}
+data1 <- 
+ data %>%
+  mutate(date = ymd(paste(year, month, 1))) %>%
+   select(date, inftot) 
+   
+
+```
+
+
+```{r include=FALSE}
+mm1 %>% left_join(data1, by = c( "date")) %>%
+  mutate(allorgi = allorg/inftot) %>%
+   ggplot(aes(date, allorgi)) +
+  geom_line() 
+
+
+mm1 %>%
+  ggplot(aes(date, allorg)) +
+  geom_line() 
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+```{r include=FALSE}
+mm1_t <- window(mm1_ts, start = 2015, end = 2018)
+```
+
+
+
+
+```{r include=FALSE}
+# Модель с линейным трендом
+mm1_lin <- holt(mm1_t, alpha = 0.6, beta = 0.2, h = 24)
+
+mm1_exp <- holt(mm1_t, alpha = 0.6, beta = 0.2, 
+                initial = 'simple',  # отключаем автоподбор начальных значений
+                exponential = T, h = 24)
+```
+
+
+
+
+
+Average Method, Naïve, Seasonal naïve, Drift
+===============================================
+
+
+```{r include = FALSE}
+pao_m <- meanf(mm1_t, h = 36)
+pao_n <- naive(mm1_t, h = 36) 
+pao_sn <- snaive(mm1_t, h = 36) 
+pao_d <- rwf(mm1_t, h = 36, drift = T)
+```
+
+```{r echo = FALSE}
+autoplot(mm1_ts) +
+   autolayer(pao_m, PI = FALSE, series = 'Среднее ряда') +
+  autolayer(pao_n, PI = FALSE, series = 'Наивный прогноз') +
+  autolayer(pao_sn, PI = FALSE, series = 'С. наивный прогноз') +
+  autolayer(pao_d, PI = FALSE, series = 'Метод дрейфа')
+ 
+```
+
+Average Method, Naïve, Seasonal naïve, Drift - accuracy
+========================================
+Training period
+```{r include = FALSE}
+rbind(accuracy(pao_m),
+accuracy(pao_n),
+accuracy(pao_sn),
+accuracy(pao_d))
+```
+Test period
+```{r echo = FALSE}
+rbind(accuracy(pao_m, mm1_ts)['Test set',],
+      accuracy(pao_n, mm1_ts)['Test set',],
+      accuracy(pao_sn, mm1_ts)['Test set',],
+      accuracy(pao_d, mm1_ts)['Test set',])
+```
+
+
+Sliding control method
+===========================================
+
+```{r include = FALSE}
+pao3 <- mm1_ts %>% window(start = 2010)
+tsCV(pao3, meanf, h = 4)
+```
+
+Accuracy
+```{r echo = FALSE}
+RMSE <- function(errors) {
+  errors^2 %>% mean(na.rm = T) %>% sqrt()
+}
+# Усреднение
+pao3 %>% tsCV(meanf, h = 12) %>% RMSE() %>% round(1)
+# Наивный прогноз
+pao3 %>% tsCV(naive, h = 12) %>% RMSE() %>% round(1)
+# Сезонный наивный прогноз
+pao3 %>% tsCV(snaive, h = 12) %>% RMSE() %>% round(1)
+# Метод дрейфа
+pao3 %>% tsCV(rwf, drift = TRUE, h = 12) %>% RMSE() %>% round(1)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Holt:
+=================================================
+```{r echo = FALSE}
+autoplot(mm1_t, series = 'Факт') +
+  autolayer(mm1_lin$mean, series = 'Линейный тренд') +
+  autolayer(mm1_exp$mean, series = 'Экспоненциальный тренд') +
+  labs( 
+       x = 'time', y = 'turnover')
+```
+
+Holt:  - accuracy
+=================================================
+Accuracy -  Training period
+```{r echo = FALSE}
+rbind(accuracy(mm1_lin) ,
+accuracy(mm1_exp))
+```
+Accuracy - Test period
+```{r echo = FALSE}
+rbind(accuracy(mm1_lin, mm1_ts)['Test set',],
+      accuracy(mm1_exp, mm1_ts)['Test set',])
+```
+
+Holt: auto constant
+=====================================================
+
+
+```{r include=FALSE}
+
+mm1_ad <- holt(mm1_t, damped = T, h = 24) # адд. затухающий тренд
+mm1_md <- holt(mm1_t, exponential = T, damped = T, h = 24) # мульт. затухающий тренд
+
+```
+
+
+```{r echo = FALSE}
+autoplot(mm1_t, series = 'Факт') +
+  autolayer(mm1_ad$mean, series = 'Адд. зат. тренд') +
+  autolayer(mm1_md$mean, series = 'Мульт. зат. тренд') +
+  labs(title = 'turnover',
+       y = 'turnover', x = 'time', color = NULL)
+```
+
+
+Holt: auto constant - accuracy
+================================================
+Training
+```{r echo = FALSE}
+rbind(accuracy(mm1_ad),
+accuracy(mm1_md))
+```
+
+Test
+```{r echo = FALSE}
+rbind(accuracy(mm1_ad, mm1_ts)['Test set',],
+      accuracy(mm1_md, mm1_ts)['Test set',])
+```
+
+
+Winters
+===============================================
+
+```{r include=FALSE}
+mm1_w <- hw(mm1_t, h = 24, seasonal = 'multiplicative')
+mm1_w1 <- hw(mm1_t, h = 24, seasonal = 'additive')
+```
+
+
+
+```{r echo = FALSE}
+autoplot(mm1_t, series = 'Факт') +
+  autolayer(mm1_w$mean, series = 'Винтерс_Мульт')+
+    autolayer(mm1_w1$mean, series = 'Винтерс_Ад')
+```
+
+Winters: accuracy
+============================
+Training
+```{r echo = FALSE}
+rbind(accuracy(mm1_w),
+accuracy(mm1_w1))
+
+```
+Test
+```{r echo = FALSE}
+rbind(accuracy(mm1_w, mm1_ts)['Test set',],
+      accuracy(mm1_w1, mm1_ts)['Test set',]) 
+```
+
+
+Winters: seasonality
+==========================================
+
+```{r include=FALSE}
+mm1_wa <- hw(mm1_t, h = 24, seasonal = 'multiplicative')
+mm1_wb <- hw(mm1_t, h = 24, seasonal = 'multiplicative', exponential = T)
+mm1_wc <- hw(mm1_t, h = 24, seasonal = 'multiplicative', damped = T)
+mm1_wd <- hw(mm1_t, h = 24, seasonal = 'multiplicative', exponential = T, damped = T)
+```
+
+
+```{r echo  = FALSE}
+autoplot(mm1_t, series = 'Факт') +
+  autolayer(mm1_wa$mean, series = 'Винтерс_Мульт')+
+   autolayer(mm1_wb$mean, series = 'Винтерс_Муль_Эксп')+
+   autolayer(mm1_wc$mean, series = 'Винтерс_Мулт_Зат')+
+   autolayer(mm1_wd$mean, series = 'Винтерс_Муль_Зат_Экс')
+```
+
+
+Winters:seasonality - accuracy
+======================================
+Training
+```{r echo  = FALSE}
+rbind(accuracy(mm1_wa),
+accuracy(mm1_wb),
+accuracy(mm1_wc),
+accuracy(mm1_wd))
+```
+
+Test
+```{r echo = FALSE}
+rbind(accuracy(mm1_wa, mm1_ts)['Test set',],
+      accuracy(mm1_wb, mm1_ts)['Test set',],
+      accuracy(mm1_wc, mm1_ts)['Test set',],
+      accuracy(mm1_wd, mm1_ts)['Test set',])
+```
+
+
+
+
+
